@@ -2,17 +2,20 @@ package main
 
 import (
 	"context"
+	"math/rand"
 	"time"
 
 	"github.com/edaniels/golog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/schollz/progressbar/v3"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.viam.com/utils"
 )
 
 const (
-	mongoURL                       = "mongodb://localhost:27017/"
+	mongoURI                       = "mongodb://localhost:27017/"
 	QueryableTabularDatabaseName   = "sensorData"
 	QueryableTabularCollectionName = "readings"
 )
@@ -55,6 +58,13 @@ func mainWithArgs(ctx context.Context, args []string, logger golog.Logger) error
 	machineID := getValueOrGenerateRandom(argsParsed.MachineID)
 	partID := getValueOrGenerateRandom(argsParsed.PartID)
 
+	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	if err != nil {
+		return errors.Wrap(err, "failed to connect to local mongo")
+	}
+	defer mongoClient.Disconnect(ctx)
+	coll := mongoClient.Database(QueryableTabularDatabaseName).Collection(QueryableTabularCollectionName)
+
 	var endTime time.Time
 	if argsParsed.EndTime == "" {
 		endTime = time.Now()
@@ -88,7 +98,7 @@ func mainWithArgs(ctx context.Context, args []string, logger golog.Logger) error
 		Frequency:        argsParsed.Frequency,
 	}
 
-	return generateDatapoints(input, numDatapoints)
+	return generateDatapoints(ctx, input, coll, numDatapoints)
 }
 
 // {
@@ -117,16 +127,16 @@ type movementSensor struct {
 }
 
 type sensor struct {
-	Readings sensorReadings
+	Readings sensorReadings `bson:"readings"`
 }
 
 type sensorReadings struct {
-	ViamUploaded string
-	Time         string
-	Type         string
-	Temp         string
-	CookTime     string
-	BeginTime    string
+	ViamUploaded bool    `bson:"viam_uploaded"`
+	Time         string  `bson:"time"`
+	Type         string  `bson:"type"`
+	Temp         float64 `bson:"temp"`
+	CookTime     float64 `bson:"cook_time"`
+	BeginTime    float64 `bson:"begin_time"`
 	// "viam_uploaded": "0",
 	// "time": "2024-09-17 20:55:44",
 	// "type": "original",
@@ -136,27 +146,28 @@ type sensorReadings struct {
 }
 
 type datapoint struct {
-	OrgID                string
-	LocID                string
-	RobotID              string
-	PartID               string
-	ComponentName        string
-	ComponentType        string
-	MethodName           string
-	Tags                 *nullObject
-	AdditionalParameters nullObject
-	Data                 any
-	CaptureDay           time.Time
-	TimeRequested        time.Time
-	TimeReceived         time.Time
+	OrgID                string      `bson:"organization_id"`
+	LocID                string      `bson:"location_id"`
+	RobotID              string      `bson:"robot_id"`
+	PartID               string      `bson:"part_id"`
+	ComponentName        string      `bson:"component_name"`
+	ComponentType        string      `bson:"component_type"`
+	MethodName           string      `bson:"method_name"`
+	Tags                 *nullObject `bson:"tags"`
+	AdditionalParameters nullObject  `bson:"additional_parameters"`
+	Data                 any         `bson:"data"`
+	CaptureDay           time.Time   `bson:"capture_day"`
+	TimeRequested        time.Time   `bson:"time_requested"`
+	TimeReceived         time.Time   `bson:"time_receieved"`
 }
 
-func generateDatapoints(input classyInput, numDatapoints int) error {
+func generateDatapoints(ctx context.Context, input classyInput, coll *mongo.Collection, numDatapoints int) error {
+	logger.Info("Generating data points...")
 	bar := progressbar.Default(int64(numDatapoints))
 
 	period := 1.0 / input.Frequency
 
-	docs := []datapoint{}
+	docs := []any{}
 
 	componentName := "sensy-1"
 	componentType := "rdk:component:sensor"
@@ -169,6 +180,16 @@ func generateDatapoints(input classyInput, numDatapoints int) error {
 
 	for iter := input.StartTime; !iter.After(input.EndTime); iter = iter.Add(time.Duration(period) * time.Second) {
 		bar.Add(1)
+		sensorReading := sensor{
+			Readings: sensorReadings{
+				ViamUploaded: false,
+				Time:         iter.Add(time.Duration(rand.Intn(10)) * time.Millisecond).Format(time.DateTime),
+				Type:         "original",
+				Temp:         randFloatN(500),
+				CookTime:     randFloatN(200),
+				BeginTime:    float64(iter.Unix()),
+			},
+		}
 		docs = append(docs, datapoint{
 			OrgID:         input.OrgID,
 			LocID:         input.LocID,
@@ -180,15 +201,21 @@ func generateDatapoints(input classyInput, numDatapoints int) error {
 			TimeRequested: iter,
 			TimeReceived:  iter,
 			CaptureDay:    floorTime(iter),
-			Data:          sensor{},
+			Data:          sensorReading,
 		})
-		// time.Sleep(time.Millisecond)
-		// captureDays = append(captureDays, iter.Format(time.DateOnly))
-		// logger.Infof("date: %s", iter.Format(time.DateTime))
-
 	}
+
+	_, err := coll.InsertMany(ctx, docs)
+	if err != nil {
+		return errors.Wrap(err, "error inserting data to mongo")
+	}
+
 	return nil
 
+}
+
+func randFloatN(n float64) float64 {
+	return rand.Float64() * n
 }
 
 func floorTime(t time.Time) time.Time {
