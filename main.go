@@ -26,7 +26,7 @@ type arguments struct {
 	OrgID            string `flag:"org_id,usage=org id"`
 	LocID            string `flag:"loc_id,usage=location id"`
 	MachineID        string `flag:"machine_id,usage=machine id"`
-	PartID           string `flag:"part_id,usage=location id"`
+	PartID           string `flag:"part_id,usage=part id"`
 	StartTime        string `flag:"start_time,usage=start date format:2006-01-02 15:04:05,required=true"`
 	EndTime          string `flag:"end_time,usage=end date of data range, if left unset will be today format:2006-01-02 15:04:05"`
 	IsMovementSensor bool   `flag:"is_mov,usage=if false will generate sensor data, if true will generate movement sensor"`
