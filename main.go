@@ -159,7 +159,7 @@ type datapoint struct {
 	Data                 any         `bson:"data"`
 	CaptureDay           time.Time   `bson:"capture_day"`
 	TimeRequested        time.Time   `bson:"time_requested"`
-	TimeReceived         time.Time   `bson:"time_receieved"`
+	TimeReceived         time.Time   `bson:"time_received"`
 }
 
 func generateDatapoints(ctx context.Context, input classyInput, coll *mongo.Collection, numDatapoints int) error {
