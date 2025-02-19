@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/edaniels/golog"
@@ -31,7 +32,7 @@ type arguments struct {
 	EndTime          string `flag:"end_time,usage=end date of data range, if left unset will be today format:2006-01-02 15:04:05"`
 	IsMovementSensor bool   `flag:"is_mov,usage=UNIMPLEMENTED"`
 	// IsMovementSensor bool   `flag:"is_mov,usage=if false will generate sensor data, if true will generate movement sensor"`
-	Frequency int `flag:"f,usage=frequency of simulated data in hz,required=true"`
+	Frequency string `flag:"f,usage=frequency of simulated data in hz,required=true"`
 }
 
 type classyInput struct {
@@ -42,7 +43,7 @@ type classyInput struct {
 	StartTime        time.Time
 	EndTime          time.Time
 	IsMovementSensor bool
-	Frequency        int
+	Frequency        float64
 }
 
 func main() {
@@ -84,7 +85,13 @@ func mainWithArgs(ctx context.Context, args []string, logger golog.Logger) error
 			time.DateTime, argsParsed.EndTime)
 	}
 
-	numDatapoints := calculateNumDataPoints(argsParsed.Frequency, startTime, endTime)
+	freq, err := strconv.ParseFloat(argsParsed.Frequency, 64)
+	if err != nil {
+		return errors.WithMessagef(err, "failed to parse provided frequency, please specify frequency as a string %s",
+			argsParsed.Frequency)
+	}
+
+	numDatapoints := calculateNumDataPoints(freq, startTime, endTime)
 
 	logger.Infof("Will generate %d datapoints between %s and %s", numDatapoints, startTime, endTime)
 
@@ -96,7 +103,7 @@ func mainWithArgs(ctx context.Context, args []string, logger golog.Logger) error
 		StartTime:        startTime,
 		EndTime:          endTime,
 		IsMovementSensor: argsParsed.IsMovementSensor,
-		Frequency:        argsParsed.Frequency,
+		Frequency:        freq,
 	}
 
 	return generateDatapoints(ctx, input, coll, numDatapoints)
@@ -223,9 +230,9 @@ func floorTime(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func calculateNumDataPoints(freq int, startTime, endTime time.Time) int {
+func calculateNumDataPoints(freq float64, startTime, endTime time.Time) int {
 	timeSpan := endTime.Sub(startTime)
-	return int(timeSpan.Minutes()) * freq * 60
+	return int(timeSpan.Seconds() * freq)
 }
 
 func getValueOrGenerateRandom(arg string) string {
