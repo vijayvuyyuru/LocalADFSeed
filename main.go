@@ -64,7 +64,7 @@ func mainWithArgs(ctx context.Context, args []string, logger golog.Logger) error
 		return errors.Wrap(err, "failed to connect to local mongo")
 	}
 	defer mongoClient.Disconnect(ctx)
-	coll := mongoClient.Database(QueryableTabularDatabaseName).Collection(QueryableTabularCollectionName)
+	coll := mongoClient.Database(QueryableTabularDatabaseName).Collection(orgID)
 
 	var endTime time.Time
 	if argsParsed.EndTime == "" {
@@ -184,8 +184,8 @@ func generateDatapoints(ctx context.Context, input classyInput, coll *mongo.Coll
 		sensorReading := sensor{
 			Readings: sensorReadings{
 				ViamUploaded: false,
-				Time:         iter.Add(time.Duration(rand.Intn(10)) * time.Millisecond).Format(time.DateTime),
-				Type:         "original",
+				Time:         generateRandomString(100_000),
+				Type:         generateRandomString(100_000),
 				Temp:         randFloatN(500),
 				CookTime:     randFloatN(200),
 				BeginTime:    float64(iter.Unix()),
@@ -233,4 +233,13 @@ func getValueOrGenerateRandom(arg string) string {
 		return uuid.New().String()
 	}
 	return arg
+}
+
+func generateRandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
 }
