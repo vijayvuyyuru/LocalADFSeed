@@ -184,8 +184,8 @@ func generateDatapoints(ctx context.Context, input classyInput, coll *mongo.Coll
 		sensorReading := sensor{
 			Readings: sensorReadings{
 				ViamUploaded: false,
-				Time:         generateRandomString(100_000),
-				Type:         generateRandomString(100_000),
+				Time:         generateRandomString(100_00),
+				Type:         generateRandomString(100_00),
 				Temp:         randFloatN(500),
 				CookTime:     randFloatN(200),
 				BeginTime:    float64(iter.Unix()),
